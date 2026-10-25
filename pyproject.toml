@@ -1,0 +1,50 @@
+[project]
+name = "gflow-parser"
+version = "0.2.0"
+description = "Automatic triage parsing: upload, discover platform, publish events"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "pydantic==2.12.5",
+    "taskiq==0.12.1",
+    "taskiq-redis==1.2.2",
+    "redis==7.4.1",
+    "sqlalchemy==2.0.49",
+    "asyncpg==0.31.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi==0.135.2",
+    "fastapi-pagination==0.15.13",
+    "uvicorn==0.42.0",
+]
+worker = [
+    "aiokafka==0.14.0",
+    "dissect==3.22",
+    "orjson==3.11.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "aiosqlite>=0.22.1",
+    "httpx>=0.28.1",
+    "ruff>=0.15.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["postgres: requires isolated TEST_DB_URL", "redis: requires REDIS_SERVER_BIN for an isolated local Redis"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

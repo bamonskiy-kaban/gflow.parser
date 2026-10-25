@@ -1,0 +1,100 @@
+name: gflow-parser-auto
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+      target: api
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ${LOCAL_TARGETS_DIR:?Set LOCAL_TARGETS_DIR to an existing storage mount}
+        target: /targets
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DB_URL: postgresql+asyncpg://user:password@postgres:5432/db
+      DISPATCH_TIMEOUT: ${DISPATCH_TIMEOUT:-10}
+      DISPATCH_RECHECK: ${DISPATCH_RECHECK:-600}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-10}
+      HEARTBEAT_TIMEOUT: ${HEARTBEAT_TIMEOUT:-600}
+      MAX_UPLOADS: ${MAX_UPLOADS:-4}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-107374182400}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+      target: worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: ${WORKER_STOP_GRACE:-3600s}
+    volumes:
+      - type: bind
+        source: ${LOCAL_TARGETS_DIR:?Set LOCAL_TARGETS_DIR to an existing storage mount}
+        target: /targets
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DB_URL: postgresql+asyncpg://user:password@postgres:5432/db
+      WORKERS: ${WORKERS:-2}
+      BOOTSTRAP_SERVERS: ${BOOTSTRAP_SERVERS:?Set BOOTSTRAP_SERVERS}
+      TOPIC: ${TOPIC:?Set TOPIC}
+      KAFKA_TIMEOUT: ${KAFKA_TIMEOUT:-20}
+      KAFKA_RETRY_DELAY: ${KAFKA_RETRY_DELAY:-5}
+      KAFKA_LOG_INTERVAL: ${KAFKA_LOG_INTERVAL:-30}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL:-10}
+      HEARTBEAT_TIMEOUT: ${HEARTBEAT_TIMEOUT:-600}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
