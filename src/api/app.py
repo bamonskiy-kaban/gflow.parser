@@ -168,7 +168,6 @@ async def get_evidence(eid: int):
 
 
 async def locked_evidence(session, eid):
-    # Case -> Evidence is also the deletion/recreation/upload reservation lock order.
     cid = await session.scalar(select(EvidenceTable.case_id).where(EvidenceTable.id == eid))
     if cid is None:
         raise HTTPException(404, "Evidence not found")
@@ -205,6 +204,7 @@ async def delete_evidence(eid: int):
     async with async_session_maker.begin() as session:
         _, evidence = await locked_evidence(session, eid)
         await session.delete(evidence)
+        await disk(shutil.rmtree, f'{TARGET_ROOT}/{evidence.storage_path}', ignore_errors=True)
     return Response(status_code=204)
 
 
