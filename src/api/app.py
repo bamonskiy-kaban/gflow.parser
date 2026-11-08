@@ -180,25 +180,6 @@ async def locked_evidence(session, eid):
     return case, evidence
 
 
-@app.post("/evidences/{eid}/recreate", response_model=schemas.EvidenceRead, status_code=202)
-async def recreate_evidence(eid: int):
-    async with async_session_maker.begin() as session:
-        case, old = await locked_evidence(session, eid)
-        if old.size_bytes is None or old.sha256 is None:
-            raise HTTPException(409, "Incomplete upload: delete Evidence and upload the file again")
-        values = {name: getattr(old, name) for name in ("filename", "storage_path", "size_bytes", "sha256")}
-        await session.delete(old)
-        await session.flush()
-        new = EvidenceTable(
-            case_id=case.id, uid=f"{case.short_name}-{uuid.uuid4()}", status="processing", **values
-        )
-        session.add(new)
-        await session.flush()
-        session.add(TaskTable(evidence_id=new.id, name="acquire_target_info"))
-        new_id = new.id
-    return await read_evidence(new_id)
-
-
 @app.delete("/evidences/{eid}", status_code=204)
 async def delete_evidence(eid: int):
     async with async_session_maker.begin() as session:
