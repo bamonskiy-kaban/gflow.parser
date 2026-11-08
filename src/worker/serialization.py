@@ -21,7 +21,6 @@ class JsonRecordPackerWrapper:
                 "os": self.os,
                 "uid": self.uid,
                 "function": self.func_name,
-                "record_type": "event",
                 "event_type": result["_recorddescriptor"][0]
             }
             for field in EXCLUDE_FIELDS:
