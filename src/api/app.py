@@ -1,25 +1,26 @@
 import asyncio
 import logging
 import uuid
+import shutil
 from contextlib import asynccontextmanager, suppress
 from time import monotonic
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi_pagination import Page, add_pagination
 from fastapi_pagination.ext.sqlalchemy import apaginate
-from sqlalchemy import func, inspect, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from api import schemas
 from api.dispatch import maintenance_loop
-from api.uploads import filename_from_header, save_upload
+from api.uploads import filename_from_header, save_upload, disk
 from core.broker import broker
-from core.config import MAX_UPLOADS
+from core.config import MAX_UPLOADS, TARGET_ROOT
 from core.database import async_session_maker, engine
 from core.heartbeat import TaskHeartbeat
 from core.models import WorkItem
 from core.runtime import TERMINAL, finish_task, finish_upload
-from core.tables import Base, CaseTable, EvidenceTable, TaskTable
+from core.tables import CaseTable, EvidenceTable, TaskTable
 
 log = logging.getLogger(__name__)
 upload_slots = asyncio.Semaphore(MAX_UPLOADS)
@@ -94,6 +95,7 @@ async def delete_case(cid: int):
         if active is not None:
             raise HTTPException(409, "Case has active evidence")
         await session.delete(case)
+        await disk(shutil.rmtree, f'{TARGET_ROOT}/{case.short_name}', ignore_errors=True)
     return Response(status_code=204)
 
 
